@@ -504,19 +504,29 @@ export default defineComponent({
               engineDir: newEngineDir.value,
             })
           );
-
-          requireRestart(
-            "エンジンを追加しました。反映には再起動が必要です。今すぐ再起動しますか？"
-          );
+          await store.dispatch("GET_ENGINE_INFOS");
+          showDialog("エンジンを追加しました。エンジンを読み込みます。");
+          toInitialState();
+          const engineIds = computed(() => store.state.engineIds);
+          await store.dispatch("RESTART_ENGINES", {
+            engineIds: engineIds.value,
+          });
         } else {
           const success = await lockUi(
             "addingEngine",
             store.dispatch("INSTALL_VVPP_ENGINE", vvppFilePath.value)
           );
+
           if (success) {
-            requireRestart(
-              "エンジンを追加しました。反映には再起動が必要です。今すぐ再起動しますか？"
-            );
+            await store.dispatch("GET_ENGINE_INFOS");
+            showDialog("エンジンを追加しました。エンジンを読み込みます。");
+            toInitialState();
+            const engineIds = computed(() => store.state.engineIds);
+            await store.dispatch("RESTART_ENGINES", {
+              engineIds: engineIds.value,
+            });
+          } else {
+            showDialog("エンジンの追加に失敗しました。");
           }
         }
       });
@@ -549,9 +559,16 @@ export default defineComponent({
                 engineDir,
               })
             );
-            requireRestart(
-              "エンジンを削除しました。反映には再起動が必要です。今すぐ再起動しますか？"
+            showDialog(
+              "エンジンを削除しました。(ファイルは終了時に削除されます）"
             );
+            toInitialState();
+            await store.dispatch("GET_ENGINE_INFOS");
+            const engineIds = computed(() => store.state.engineIds);
+            await store.dispatch("RESTART_ENGINES", {
+              engineIds: engineIds.value,
+            });
+            //const engineIds = computed(() => store.state.engineIds);
             break;
           }
           case "vvpp": {
@@ -560,9 +577,18 @@ export default defineComponent({
               store.dispatch("UNINSTALL_VVPP_ENGINE", selectedId.value)
             );
             if (success) {
-              requireRestart(
-                "エンジンの削除には再起動が必要です。今すぐ再起動しますか？"
+              showDialog(
+                "エンジンを削除しました。(ファイルは終了時に削除されます）"
               );
+              toInitialState();
+              await store.dispatch("GET_ENGINE_INFOS");
+              const engineIds = computed(() => store.state.engineIds);
+              await store.dispatch("RESTART_ENGINES", {
+                engineIds: engineIds.value,
+              });
+            } else {
+              showDialog("エンジンを削除に失敗しました。");
+              toInitialState();
             }
             break;
           }
@@ -589,31 +615,18 @@ export default defineComponent({
         engineIds: [selectedId.value],
       });
     };
-
-    const requireRestart = (message: string) => {
+    const showDialog = (message: string) => {
       $q.dialog({
-        title: "再起動が必要です",
+        title: "メッセージ",
         message: message,
         noBackdropDismiss: true,
-        cancel: {
-          label: "後で",
-          color: "display",
-          flat: true,
-        },
         ok: {
-          label: "再起動",
+          label: "OK",
           flat: true,
-          textColor: "warning",
+          textColor: "info",
         },
-      })
-        .onOk(() => {
-          store.dispatch("RESTART_APP", {});
-        })
-        .onCancel(() => {
-          toInitialState();
-        });
+      });
     };
-
     const newEngineDir = ref("");
     const newEngineDirValidationState =
       ref<EngineDirValidationResult | null>(null);
