@@ -9,6 +9,7 @@ import {
   defaultHotkeySettings,
   HotkeySettingType,
   ExperimentalSettingType,
+  HotkeyCombination,
 } from "@/type/preload";
 
 const lockKey = "save";
@@ -122,6 +123,20 @@ const migrations: [string, (store: Record<string, unknown>) => unknown][] = [
       return config;
     },
   ],
+  [
+    ">=0.17",
+    (config) => {
+      // 書き出し先のディレクトリが空文字の場合書き出し先固定を無効化する
+      // FIXME: 勝手に書き換えるのは少し不親切なので、ダイアログで書き換えたことを案内する
+      const savingSetting = config.savingSetting as ConfigType["savingSetting"];
+      if (
+        savingSetting.fixedExportEnabled &&
+        savingSetting.fixedExportDir === ""
+      ) {
+        savingSetting.fixedExportEnabled = false;
+      }
+    },
+  ],
 ];
 
 export type Metadata = {
@@ -223,7 +238,7 @@ export abstract class BaseConfigManager {
   }
 
   private migrateHotkeySettings(data: ConfigType): ConfigType {
-    const COMBINATION_IS_NONE = "####";
+    const COMBINATION_IS_NONE = HotkeyCombination("####");
     const loadedHotkeys = structuredClone(data.hotkeySettings);
     const hotkeysWithoutNewCombination = defaultHotkeySettings.map(
       (defaultHotkey) => {
@@ -249,7 +264,7 @@ export abstract class BaseConfigManager {
         if (combinationExists) {
           const emptyHotkey: HotkeySettingType = {
             action: newHotkey.action,
-            combination: "",
+            combination: HotkeyCombination(""),
           };
           return emptyHotkey;
         } else {

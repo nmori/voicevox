@@ -1,4 +1,5 @@
 import { Patch } from "immer";
+import { z } from "zod";
 import {
   MutationTree,
   MutationsBase,
@@ -47,6 +48,9 @@ import {
   AudioKey,
   PresetKey,
   RootMiscSettingType,
+  engineIdSchema,
+  styleIdSchema,
+  EditorType,
 } from "@/type/preload";
 import { IEngineConnectorFactory } from "@/infrastructures/EngineConnector";
 import {
@@ -55,6 +59,7 @@ import {
   NotifyAndNotShowAgainButtonOption,
   LoadingScreenOption,
 } from "@/components/Dialog/Dialog";
+import { OverlappingNoteInfos } from "@/sing/storeHelper";
 
 /**
  * エディタ用のAudioQuery
@@ -706,24 +711,29 @@ export type AudioPlayerStoreTypes = {
  * Singing Store Types
  */
 
-export type Tempo = {
-  position: number;
-  bpm: number;
-};
+// schemaはプロジェクトファイル用
+// TODO: schemaをsrc/domain/projectSchema.tsに移動する
+export const tempoSchema = z.object({
+  position: z.number(),
+  bpm: z.number(),
+});
+export type Tempo = z.infer<typeof tempoSchema>;
 
-export type TimeSignature = {
-  measureNumber: number;
-  beats: number;
-  beatType: number;
-};
+export const timeSignatureSchema = z.object({
+  measureNumber: z.number(),
+  beats: z.number(),
+  beatType: z.number(),
+});
+export type TimeSignature = z.infer<typeof timeSignatureSchema>;
 
-export type Note = {
-  id: string;
-  position: number;
-  duration: number;
-  noteNumber: number;
-  lyric: string;
-};
+export const noteSchema = z.object({
+  id: z.string(),
+  position: z.number(),
+  duration: z.number(),
+  noteNumber: z.number(),
+  lyric: z.string(),
+});
+export type Note = z.infer<typeof noteSchema>;
 
 export type Score = {
   tpqn: number;
@@ -732,17 +742,20 @@ export type Score = {
   notes: Note[];
 };
 
-export type Singer = {
-  engineId: EngineId;
-  styleId: StyleId;
-};
+export const singerSchema = z.object({
+  engineId: engineIdSchema,
+  styleId: styleIdSchema,
+});
 
-export type Track = {
-  singer?: Singer;
-  notesKeyShift: number;
-  voiceKeyShift: number;
-  notes: Note[];
-};
+export type Singer = z.infer<typeof singerSchema>;
+
+export const trackSchema = z.object({
+  singer: singerSchema.optional(),
+  keyRangeAdjustment: z.number(), // 音域調整量
+  volumeRangeAdjustment: z.number(), // 声量調整量
+  notes: z.array(noteSchema),
+});
+export type Track = z.infer<typeof trackSchema>;
 
 export type PhraseState =
   | "WAITING_TO_BE_RENDERED"
@@ -752,8 +765,8 @@ export type PhraseState =
 
 export type Phrase = {
   singer?: Singer;
-  notesKeyShift: number;
-  voiceKeyShift: number;
+  keyRangeAdjustment: number;
+  volumeRangeAdjustment: number;
   tpqn: number;
   tempos: Tempo[];
   notes: Note[];
@@ -777,11 +790,10 @@ export type SingingStoreState = {
   sequencerSnapType: number;
   selectedNoteIds: Set<string>;
   overlappingNoteIds: Set<string>;
+  overlappingNoteInfos: OverlappingNoteInfos;
   editingLyricNoteId?: string;
   nowPlaying: boolean;
   volume: number;
-  leftLocatorPosition: number;
-  rightLocatorPosition: number;
   startRenderingRequested: boolean;
   stopRenderingRequested: boolean;
   nowRendering: boolean;
@@ -795,14 +807,23 @@ export type SingingStoreTypes = {
     action(payload: { isShowSinger: boolean }): void;
   };
 
+  SETUP_SINGER: {
+    action(payload: { singer: Singer }): void;
+  };
+
   SET_SINGER: {
     mutation: { singer?: Singer };
     action(payload: { singer?: Singer }): void;
   };
 
-  SET_VOICE_KEY_SHIFT: {
-    mutation: { voiceKeyShift: number };
-    action(payload: { voiceKeyShift: number }): void;
+  SET_KEY_RANGE_ADJUSTMENT: {
+    mutation: { keyRangeAdjustment: number };
+    action(payload: { keyRangeAdjustment: number }): void;
+  };
+
+  SET_VOLUME_RANGE_ADJUSTMENT: {
+    mutation: { volumeRangeAdjustment: number };
+    action(payload: { volumeRangeAdjustment: number }): void;
   };
 
   SET_SCORE: {
@@ -812,22 +833,18 @@ export type SingingStoreTypes = {
 
   SET_TEMPO: {
     mutation: { tempo: Tempo };
-    action(payload: { tempo: Tempo }): void;
   };
 
   REMOVE_TEMPO: {
     mutation: { position: number };
-    action(payload: { position: number }): void;
   };
 
   SET_TIME_SIGNATURE: {
     mutation: { timeSignature: TimeSignature };
-    action(payload: { timeSignature: TimeSignature }): void;
   };
 
   REMOVE_TIME_SIGNATURE: {
     mutation: { measureNumber: number };
-    action(payload: { measureNumber: number }): void;
   };
 
   NOTE_IDS: {
@@ -836,17 +853,14 @@ export type SingingStoreTypes = {
 
   ADD_NOTES: {
     mutation: { notes: Note[] };
-    action(payload: { notes: Note[] }): void;
   };
 
   UPDATE_NOTES: {
     mutation: { notes: Note[] };
-    action(payload: { notes: Note[] }): void;
   };
 
   REMOVE_NOTES: {
     mutation: { noteIds: string[] };
-    action(payload: { noteIds: string[] }): void;
   };
 
   SELECT_NOTES: {
@@ -854,12 +868,13 @@ export type SingingStoreTypes = {
     action(payload: { noteIds: string[] }): void;
   };
 
-  DESELECT_ALL_NOTES: {
+  SELECT_ALL_NOTES: {
     mutation: undefined;
     action(): void;
   };
 
-  REMOVE_SELECTED_NOTES: {
+  DESELECT_ALL_NOTES: {
+    mutation: undefined;
     action(): void;
   };
 
@@ -913,10 +928,14 @@ export type SingingStoreTypes = {
   };
 
   IMPORT_MIDI_FILE: {
-    action(payload: { filePath?: string }): void;
+    action(payload: { filePath: string; trackIndex: number }): void;
   };
 
   IMPORT_MUSICXML_FILE: {
+    action(payload: { filePath?: string }): void;
+  };
+
+  IMPORT_UST_FILE: {
     action(payload: { filePath?: string }): void;
   };
 
@@ -950,16 +969,6 @@ export type SingingStoreTypes = {
 
   REMOVE_PLAYHEAD_POSITION_CHANGE_LISTENER: {
     action(payload: { listener: (position: number) => void }): void;
-  };
-
-  SET_LEFT_LOCATOR_POSITION: {
-    mutation: { position: number };
-    action(payload: { position: number }): void;
-  };
-
-  SET_RIGHT_LOCATOR_POSITION: {
-    mutation: { position: number };
-    action(payload: { position: number }): void;
   };
 
   SET_PLAYBACK_STATE: {
@@ -1014,6 +1023,82 @@ export type SingingStoreTypes = {
   STOP_RENDERING: {
     action(): void;
   };
+
+  COPY_NOTES_TO_CLIPBOARD: {
+    action(): void;
+  };
+
+  COMMAND_CUT_NOTES_TO_CLIPBOARD: {
+    action(): void;
+  };
+
+  COMMAND_PASTE_NOTES_FROM_CLIPBOARD: {
+    action(): void;
+  };
+
+  COMMAND_QUANTIZE_SELECTED_NOTES: {
+    action(): void;
+  };
+};
+
+export type SingingCommandStoreState = {
+  //
+};
+
+export type SingingCommandStoreTypes = {
+  COMMAND_SET_SINGER: {
+    mutation: { singer: Singer };
+    action(payload: { singer: Singer }): void;
+  };
+
+  COMMAND_SET_KEY_RANGE_ADJUSTMENT: {
+    mutation: { keyRangeAdjustment: number };
+    action(payload: { keyRangeAdjustment: number }): void;
+  };
+
+  COMMAND_SET_VOLUME_RANGE_ADJUSTMENT: {
+    mutation: { volumeRangeAdjustment: number };
+    action(payload: { volumeRangeAdjustment: number }): void;
+  };
+
+  COMMAND_SET_TEMPO: {
+    mutation: { tempo: Tempo };
+    action(payload: { tempo: Tempo }): void;
+  };
+
+  COMMAND_REMOVE_TEMPO: {
+    mutation: { position: number };
+    action(payload: { position: number }): void;
+  };
+
+  COMMAND_SET_TIME_SIGNATURE: {
+    mutation: { timeSignature: TimeSignature };
+    action(payload: { timeSignature: TimeSignature }): void;
+  };
+
+  COMMAND_REMOVE_TIME_SIGNATURE: {
+    mutation: { measureNumber: number };
+    action(payload: { measureNumber: number }): void;
+  };
+
+  COMMAND_ADD_NOTES: {
+    mutation: { notes: Note[] };
+    action(payload: { notes: Note[] }): void;
+  };
+
+  COMMAND_UPDATE_NOTES: {
+    mutation: { notes: Note[] };
+    action(payload: { notes: Note[] }): void;
+  };
+
+  COMMAND_REMOVE_NOTES: {
+    mutation: { noteIds: string[] };
+    action(payload: { noteIds: string[] }): void;
+  };
+
+  COMMAND_REMOVE_SELECTED_NOTES: {
+    action(): void;
+  };
 };
 
 /*
@@ -1021,27 +1106,27 @@ export type SingingStoreTypes = {
  */
 
 export type CommandStoreState = {
-  undoCommands: Command[];
-  redoCommands: Command[];
+  undoCommands: Record<EditorType, Command[]>;
+  redoCommands: Record<EditorType, Command[]>;
 };
 
 export type CommandStoreTypes = {
   CAN_UNDO: {
-    getter: boolean;
+    getter(editor: EditorType): boolean;
   };
 
   CAN_REDO: {
-    getter: boolean;
+    getter(editor: EditorType): boolean;
   };
 
   UNDO: {
-    mutation: undefined;
-    action(): void;
+    mutation: { editor: EditorType };
+    action(payload: { editor: EditorType }): void;
   };
 
   REDO: {
-    mutation: undefined;
-    action(): void;
+    mutation: { editor: EditorType };
+    action(payload: { editor: EditorType }): void;
   };
 
   LAST_COMMAND_UNIX_MILLISEC: {
@@ -1444,6 +1529,7 @@ export type SettingStoreTypes = {
  */
 
 export type UiStoreState = {
+  openedEditor: EditorType | undefined; // undefinedのときはどのエディタを開くか定まっていない
   uiLockCount: number;
   dialogLockCount: number;
   reloadingLock: boolean;
@@ -1460,6 +1546,7 @@ export type UiStoreState = {
   isDictionaryManageDialogOpen: boolean;
   isEngineManageDialogOpen: boolean;
   isUpdateNotificationDialogOpen: boolean;
+  isImportMidiDialogOpen: boolean;
   isMaximized: boolean;
   isPinned: boolean;
   isFullscreen: boolean;
@@ -1468,6 +1555,11 @@ export type UiStoreState = {
 };
 
 export type UiStoreTypes = {
+  SET_OPENED_EDITOR: {
+    mutation: { editor: EditorType };
+    action(palyoad: { editor: EditorType }): void;
+  };
+
   UI_LOCKED: {
     getter: boolean;
   };
@@ -1526,6 +1618,7 @@ export type UiStoreTypes = {
       isCharacterOrderDialogOpen?: boolean;
       isEngineManageDialogOpen?: boolean;
       isUpdateNotificationDialogOpen?: boolean;
+      isImportMidiDialogOpen?: boolean;
     };
     action(payload: {
       isDefaultStyleSelectDialogOpen?: boolean;
@@ -1539,6 +1632,7 @@ export type UiStoreTypes = {
       isCharacterOrderDialogOpen?: boolean;
       isEngineManageDialogOpen?: boolean;
       isUpdateNotificationDialogOpen?: boolean;
+      isImportMidiDialogOpen?: boolean;
     }): void;
   };
 
@@ -1795,7 +1889,8 @@ export type State = AudioStoreState &
   PresetStoreState &
   DictionaryStoreState &
   ProxyStoreState &
-  SingingStoreState;
+  SingingStoreState &
+  SingingCommandStoreState;
 
 type AllStoreTypes = AudioStoreTypes &
   AudioPlayerStoreTypes &
@@ -1809,15 +1904,17 @@ type AllStoreTypes = AudioStoreTypes &
   PresetStoreTypes &
   DictionaryStoreTypes &
   ProxyStoreTypes &
-  SingingStoreTypes;
+  SingingStoreTypes &
+  SingingCommandStoreTypes;
 
 export type AllGetters = StoreType<AllStoreTypes, "getter">;
 export type AllMutations = StoreType<AllStoreTypes, "mutation">;
 export type AllActions = StoreType<AllStoreTypes, "action">;
 
 export const commandMutationsCreator = <S, M extends MutationsBase>(
-  arg: PayloadRecipeTree<S, M>
-): MutationTree<S, M> => createCommandMutationTree<S, M>(arg);
+  arg: PayloadRecipeTree<S, M>,
+  editor: EditorType
+): MutationTree<S, M> => createCommandMutationTree<S, M>(arg, editor);
 
 export const transformCommandStore = <
   S,
@@ -1825,11 +1922,13 @@ export const transformCommandStore = <
   A extends ActionsBase,
   M extends MutationsBase
 >(
-  options: StoreOptions<S, G, A, M, AllGetters, AllActions, AllMutations>
+  options: StoreOptions<S, G, A, M, AllGetters, AllActions, AllMutations>,
+  editor: EditorType
 ): StoreOptions<S, G, A, M, AllGetters, AllActions, AllMutations> => {
   if (options.mutations)
     options.mutations = commandMutationsCreator<S, M>(
-      options.mutations as PayloadRecipeTree<S, M>
+      options.mutations as PayloadRecipeTree<S, M>,
+      editor
     );
   return options;
 };
