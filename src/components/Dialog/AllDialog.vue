@@ -28,7 +28,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import HelpDialog from "@/components/Dialog/HelpDialog/HelpDialog.vue";
-import SettingDialog from "@/components/Dialog/SettingDialog.vue";
+import SettingDialog from "@/components/Dialog/SettingDialog/SettingDialog.vue";
 import HotkeySettingDialog from "@/components/Dialog/HotkeySettingDialog.vue";
 import ToolBarCustomDialog from "@/components/Dialog/ToolBarCustomDialog.vue";
 import DefaultStyleListDialog from "@/components/Dialog/DefaultStyleListDialog.vue";
@@ -100,7 +100,6 @@ const isCharacterOrderDialogOpenComputed = computed({
     }),
 });
 
-// TODO: デフォルトスタイル選択(ソング)の実装
 // デフォルトスタイル選択(トーク)
 const orderedTalkCharacterInfos = computed(() => {
   return filterCharacterInfosByStyleType(
